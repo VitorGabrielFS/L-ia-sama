@@ -6,9 +6,12 @@ import pyttsx3
 import pyautogui
 import ctypes.wintypes
 from pathlib import Path
+from sklearn.feature_extraction.text import TfidfVectorizer
+from sklearn.linear_model import LogisticRegression
 
 myname = "gabriel"
 
+# --- Funções de mouse e desktop ---
 def click(x, y):
     pyautogui.moveTo(x, y)
     pyautogui.click()
@@ -29,6 +32,7 @@ pastas_comuns = [
     get_desktop_path()
 ]
 
+# Função pa fazer ela flaa
 def falar(texto):
     engine = pyttsx3.init()
     voices = engine.getProperty('voices')
@@ -40,6 +44,7 @@ def falar(texto):
     engine.say(texto)
     engine.runAndWait()
 
+#Pedir pra ela abrir o tal site o app
 def perguntar_site_ou_app(nome, reconhecedor, mic):
     print(f" Você quer abrir o site ou o aplicativo de '{nome}'?")
     print(" Diga apenas: site ou aplicativo")
@@ -56,6 +61,7 @@ def perguntar_site_ou_app(nome, reconhecedor, mic):
         print(" Erro ao acessar serviço de voz.")
     return None
 
+#Caça os executaveis no pc
 def procurar_exe(nome_exe):
     try:
         resultado = subprocess.check_output(['where', nome_exe], shell=True, text=True, stderr=subprocess.DEVNULL)
@@ -63,7 +69,7 @@ def procurar_exe(nome_exe):
         if caminhos:
             return caminhos[0]
     except subprocess.CalledProcessError:
-        print(" [DEBUG] 'where' não encontrou o executável, procurando manualmente...")
+        pass
 
     for pasta in pastas_comuns:
         if not pasta or not os.path.exists(pasta):
@@ -71,42 +77,10 @@ def procurar_exe(nome_exe):
         for root, _, files in os.walk(pasta):
             for f in files:
                 if f.lower() == nome_exe.lower():
-                    print(f" [DEBUG] Encontrado manualmente em: {os.path.join(root, f)}")
                     return os.path.join(root, f)
     return None
 
-def executar_pesquisa(comando):
-    comando = comando.lower()
-    if "youtube" in comando:
-        termo = comando.replace("pesquisar", "").replace("no youtube", "").strip()
-        url = f"https://www.youtube.com/results?search_query={termo.replace(' ', '+')}"
-        print(f" Pesquisando no YouTube: {termo}")
-        webbrowser.open(url)
-    elif "google" in comando:
-        termo = comando.replace("pesquisar", "").replace("no google", "").strip()
-        url = f"https://www.google.com/search?q={termo.replace(' ', '+')}"
-        print(f" Pesquisando no Google: {termo}")
-        webbrowser.open(url)
-    elif "navegador 2" in comando or "edge" in comando:
-        termo = comando.replace("pesquisar", "") \
-                       .replace("no edge", "") \
-                       .replace("no navegador 2", "") \
-                       .strip()
-        url = f"https://www.bing.com/search?q={termo.replace(' ', '+')}"
-        print(f" Pesquisando no Edge (Bing): {termo}")
-        edge_path = r"C:\Program Files (x86)\Microsoft\Edge\Application\msedge.exe"
-        if os.path.exists(edge_path):
-            webbrowser.register('edge', None, webbrowser.BackgroundBrowser(edge_path))
-            webbrowser.get('edge').open(url)
-        else:
-            print(" Navegador Edge não encontrado, abrindo no navegador padrão...")
-            webbrowser.open(url)
-    else:
-        termo = comando.replace("pesquisar", "").strip()
-        url = f"https://www.google.com/search?q={termo.replace(' ', '+')}"
-        print(f" Pesquisando: {termo}")
-        webbrowser.open(url)
-
+#Ja abriu agr fecha o app ne ze
 def fechar_app(nome):
     nome_exe = nome if nome.lower().endswith('.exe') else nome + '.exe'
     comando = f'taskkill /F /IM {nome_exe} /T'
@@ -122,98 +96,110 @@ def fechar_app(nome):
         print(f"Erro ao tentar fechar o aplicativo: {e}")
         falar("Ocorreu um erro ao tentar fechar o aplicativo.")
 
-def executar_com_voz(comando, reconhecedor, mic):
+#Todo mundo pesquisa ne, função de pesquisa
+def executar_pesquisa(comando):
     comando = comando.lower()
+    if "youtube" in comando:
+        termo = comando.replace("pesquisar", "").replace("no youtube", "").strip()
+        url = f"https://www.youtube.com/results?search_query={termo.replace(' ', '+')}"
+        print(f" Pesquisando no YouTube: {termo}")
+        webbrowser.open(url)
+    elif "google" in comando:
+        termo = comando.replace("pesquisar", "").replace("no google", "").strip()
+        url = f"https://www.google.com/search?q={termo.replace(' ', '+')}"
+        print(f" Pesquisando no Google: {termo}")
+        webbrowser.open(url)
+    else:
+        termo = comando.replace("pesquisar", "").strip()
+        url = f"https://www.google.com/search?q={termo.replace(' ', '+')}"
+        print(f" Pesquisando: {termo}")
+        webbrowser.open(url)
 
-    if "clicar" in comando or "click" in comando:
-        pyautogui.click()
-        print(" Clique do mouse realizado.")
-        falar("Clique realizado.")
-        return
+# --- ML NLU ---
+#Fazer ela aprender, uma ia nao é feita so de if e else ne
+frases = [
+    "abre o chrome", "abre o spotify", "fecha o notepad",
+    "pesquisar python no google", "rolar para baixo", "clique direito"
+]
+intencoes = [
+    "abrir_programa", "abrir_programa", "fechar_programa",
+    "pesquisar", "controle_mouse", "controle_mouse"
+]
 
-    if "duplo clique" in comando or "double click" in comando:
-        pyautogui.doubleClick()
-        print(" Duplo clique do mouse realizado.")
-        falar("Duplo clique realizado.")
-        return
+vectorizer = TfidfVectorizer()
+X = vectorizer.fit_transform(frases)
+model = LogisticRegression()
+model.fit(X, intencoes)
 
-    if "rolar para cima" in comando or "scroll up" in comando or "escrolar para cima" in comando:
-        pyautogui.scroll(500)
-        print(" Rolagem para cima realizada.")
-        falar("Rolando para cima.")
-        return
+def predizer_intencao(frase):
+    x = vectorizer.transform([frase])
+    return model.predict(x)[0]
 
-    if "rolar para baixo" in comando or "scroll down" in comando or "escrolar para baixo" in comando:
-        pyautogui.scroll(-500)
-        print(" Rolagem para baixo realizada.")
-        falar("Rolando para baixo.")
-        return
+#Executar comando com NLU
+def executar_com_voz(comando, reconhecedor, mic):
+    intencao = predizer_intencao(comando)
 
-    if "clique direito" in comando or "click direito" in comando or "botão direito" in comando:
-        pyautogui.click(button='right')
-        print(" Clique direito realizado.")
-        falar("Clique direito realizado.")
-        return
-
-    if comando.startswith("abrir"):
+    if intencao == "abrir_programa":
         nome = comando.replace("abrir", "").strip()
         escolha = perguntar_site_ou_app(nome, reconhecedor, mic)
         if escolha is None:
-            print(" Cancelado por falta de resposta.")
             return
         if "site" in escolha:
             url = f"https://{nome}.com"
-            print(f" Abrindo site: {url}")
             webbrowser.open(url)
         elif "aplicativo" in escolha or "app" in escolha:
-            nome_exe = nome + ".exe"
-            caminho = procurar_exe(nome_exe)
+            caminho = procurar_exe(nome + ".exe")
             if caminho:
-                print(f" Abrindo app: {caminho}")
                 subprocess.Popen(caminho, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
             else:
-                print(f" Aplicativo '{nome_exe}' não encontrado.")
-        return
-
-    if comando.startswith("fechar"):
+                print(f" Aplicativo '{nome}' não encontrado.")
+    elif intencao == "fechar_programa":
         nome = comando.replace("fechar", "").strip()
         fechar_app(nome)
-        return
-
-    if comando.startswith("pesquisar"):
+    elif intencao == "pesquisar":
         executar_pesquisa(comando)
+    elif intencao == "controle_mouse":
+        if "clicar" in comando:
+            pyautogui.click()
+            falar("Clique realizado.")
+        elif "duplo clique" in comando:
+            pyautogui.doubleClick()
+            falar("Duplo clique realizado.")
+        elif "rolar para cima" in comando:
+            pyautogui.scroll(500)
+            falar("Rolando para cima.")
+        elif "rolar para baixo" in comando:
+            pyautogui.scroll(-500)
+            falar("Rolando para baixo.")
+        elif "clique direito" in comando:
+            pyautogui.click(button='right')
+            falar("Clique direito realizado.")
+    else:
+        print(f"Intenção não reconhecida: {comando}")
+        falar("Não entendi o comando.")
 
+# --- Reconhecimento de voz ---
 def reconhecimento_de_voz():
     reconhecedor = sr.Recognizer()
     with sr.Microphone() as mic:
         while True:
             try:
                 print(" Diga 'bruna' para ativar a assistente...")
-                try:
-                    audio = reconhecedor.listen(mic)
-                except sr.WaitTimeoutError:
-                    continue
+                audio = reconhecedor.listen(mic)
                 try:
                     ativador = reconhecedor.recognize_google(audio, language='pt-BR').lower()
-                except sr.UnknownValueError:
+                except (sr.UnknownValueError, sr.RequestError):
                     continue
-                except sr.RequestError:
-                    print(" Erro no serviço de voz.")   
-                    continue
+
                 if 'bruna' in ativador:
-                    falar(f"Olá, senhor {myname}.?")
-                    print(f"Olá, sr {myname}.")
+                    falar(f"Olá, senhor {myname}.")
+                    audio = reconhecedor.listen(mic, timeout=10)
                     try:
-                        audio = reconhecedor.listen(mic, timeout=10)
                         comando = reconhecedor.recognize_google(audio, language='pt-BR').lower()
                         print(f" Você disse: {comando}")
                         executar_com_voz(comando, reconhecedor, mic)
-                    except sr.WaitTimeoutError:
-                        print(" Tempo esgotado para comando.")
-                    except sr.UnknownValueError:
+                    except (sr.UnknownValueError, sr.RequestError, sr.WaitTimeoutError):
                         print(" Não entendi o comando.")
-                    except sr.RequestError:
-                        print(" Erro no serviço de voz.")
             except Exception as e:
                 print(f" Erro: {e}")
 
